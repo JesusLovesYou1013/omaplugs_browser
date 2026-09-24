@@ -6,7 +6,7 @@
 
 set -uo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
-id="io.github.JesusLovesYou1013.omaplugs-browser"
+id="io.github.jesuslovesyou1013.omaplugs-browser"
 fails=0
 
 fake=$(mktemp -d) || exit 1

@@ -14,7 +14,7 @@ import Quickshell.Io
 Item {
   id: root
 
-  readonly property string pluginId: "io.github.JesusLovesYou1013.omaplugs-browser"
+  readonly property string pluginId: "io.github.jesuslovesyou1013.omaplugs-browser"
 
   // Local path of this plugin's folder, wherever omarchy-plugin-add put it.
   readonly property string installPath:
