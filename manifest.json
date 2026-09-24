@@ -5,15 +5,11 @@
   "version": "1.0.0",
   "author": "JesusLovesYou1013",
   "license": "GPL-3.0",
-  "description": "Browse, add, enable, disable, update and remove every available Omarchy shell plugin, including marketplace screenshots, version history and update previews — all through Omarchy's own omarchy-plugin-* commands.",
-  "kinds": ["bar-widget"],
+  "description": "Browse, add, enable, disable, update and remove every available Omarchy shell plugin, including marketplace screenshots, version history and update previews — all through Omarchy's own omarchy-plugin-* commands.\n• Must be ENABLED to take effect: it then adds Setup › Plugins › Browse Plugins to your Omarchy menu.\n• No bar icon. Disable or remove the plugin and the menu row is removed again.",
+  "kinds": [
+    "service"
+  ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
-  },
-  "barWidget": {
-    "displayName": "Browse Plugins",
-    "description": "Opens the OmaPlugs Browser",
-    "category": "Compositor",
-    "allowMultiple": false
+    "service": "Service.qml"
   }
 }

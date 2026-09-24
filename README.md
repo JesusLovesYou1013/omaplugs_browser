@@ -53,25 +53,25 @@ is refused outright. The cache lives in a temp folder that is deleted on exit. P
 come with a pretend update so you can try the Update bubble. Still real (read-only): the catalog download, GitHub
 lookups on info pages, version lists via `git ls-remote`, and opening links in your browser.
 
-## Install / uninstall (local menu row)
+## Install (recommended)
+**Setup › Plugins › Add Plugin**, paste this repo's URL and say yes to enabling it, or:
+
+    omarchy plugin add <this-repo-url>.git --enable
+
+It's a background `service` plugin with no bar icon. While enabled, it adds
+**Setup › Plugins › Browse Plugins** to your Omarchy menu. Disable it (Setup › Plugins ›
+Disable Plugin) or remove it and the menu row is removed again.
+
+Entirely per-user: no `sudo`, no system files touched. It links `~/.local/bin/omarchy-plugins`
+and adds the menu row to your own `~/.config/omarchy/extensions/omarchy-menu.jsonc`. Because
+Omarchy merges its own default menu first, the row lands *after* the built-in rows in its
+submenu (below "Remove Plugin").
+
+## Install from a checkout (without the plugin system)
     ./install.sh
     ./install.sh --uninstall
 
-Entirely per-user — no `sudo`, no system files touched. Links `~/.local/bin/omarchy-plugins`
-and adds the menu row to your own `~/.config/omarchy/extensions/omarchy-menu.jsonc`. Because
-Omarchy merges its own default menu first, a row added this way always lands *after* the
-built-in rows in its submenu (below "Remove Plugin"), never above them. An earlier version
-of this script edited Omarchy's root-owned default menu file instead; that needed sudo and
-could be wiped by an Omarchy update, so it was abandoned in favor of this.
-
-## Install from the marketplace (bar-widget)
-    omarchy plugin add <this-repo-url>.git --enable
-
-This repo is also a standalone Omarchy shell plugin: `manifest.json` + `BarWidget.qml` at the
-repo root declare a `bar-widget` that adds a bar icon which opens this same app. This is the
-form listed on `plugins.omarchy.org`. The
-two install methods are independent and can coexist: the marketplace install adds a bar icon,
-`./install.sh` adds a menu row: same app, two different launch points.
+Does the same two things as enabling the plugin, from wherever you cloned the repo.
 
 ## Test
     python3 -m unittest discover -s tests -v
