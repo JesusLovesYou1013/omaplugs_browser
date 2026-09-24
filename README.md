@@ -3,6 +3,8 @@
 An Omarchy app to browse every available shell plugin and manage the ones on this machine.
 Opens from **Setup › Plugins › Browse Plugins** (last row in that submenu, below Enable/Disable/Add/Clone/Remove).
 
+![OmaPlugs Browser showing the Available tab](preview.png)
+
 **Requirements:** Python 3 with PyGObject, GTK4 and libadwaita — already present on any stock
 Omarchy install (the same stack Omarchy's own shell tooling uses), so nothing extra to install.
 
