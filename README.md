@@ -69,7 +69,7 @@ could be wiped by an Omarchy update, so it was abandoned in favor of this.
 
 This repo is also a standalone Omarchy shell plugin: `manifest.json` + `BarWidget.qml` at the
 repo root declare a `bar-widget` that adds a bar icon which opens this same app. This is the
-form submitted to `plugins.omarchy.org` — see `SUBMISSION_GUIDE.md` for the full process. The
+form listed on `plugins.omarchy.org`. The
 two install methods are independent and can coexist: the marketplace install adds a bar icon,
 `./install.sh` adds a menu row: same app, two different launch points.
 
