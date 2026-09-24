@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "JesusLovesYou1013",
   "license": "GPL-3.0",
-  "description": "Browse, add, enable, disable, update and remove every available Omarchy shell plugin, including marketplace screenshots, version history and update previews — all through Omarchy's own omarchy-plugin-* commands.\n• Must be ENABLED to take effect: it then adds Setup › Plugins › Browse Plugins to your Omarchy menu.\n• No bar icon. Disable or remove the plugin and the menu row is removed again.",
+  "description": "Browse the Omarchy plugin marketplace and manage your installed plugins (add, remove, enable, disable, update and switch versions), with screenshots and version history. Once enabled, it opens from Setup › Plugins › Browse Plugins; no bar icon.",
   "kinds": [
     "service"
   ],
