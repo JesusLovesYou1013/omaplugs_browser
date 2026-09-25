@@ -16,6 +16,13 @@
 #
 #   ./install.sh              install
 #   ./install.sh --uninstall  remove both again
+#
+#   ~/.local/bin/omarchy-plugins is only ever replaced when it is missing, is a
+#   link to this copy, or is a link to another OmaPlugs copy (run by hand only).
+#   Anything else there belongs to the user: it is left alone, no menu row is
+#   added (the row would run it), and a warning goes to stderr. When the plugin
+#   runs this automatically (from Omarchy's plugin folder), a link to another
+#   OmaPlugs copy (e.g. a manual test install) is kept as well.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,9 +35,33 @@ refresh_menu() {
   command -v omarchy-menu >/dev/null && omarchy-menu refresh || true
 }
 
+# What is at $BIN now: none | this | omaplugs (another copy) | stale | foreign
+bin_state() {
+  [[ -e $BIN || -L $BIN ]] || { echo none; return; }
+  [[ -L $BIN ]] || { echo foreign; return; }
+  local target real
+  target="$(readlink "$BIN")"
+  [[ $target == "$HERE/omarchy-plugins" ]] && { echo this; return; }
+  if [[ -e $BIN ]]; then
+    real="$(readlink -f "$BIN")"
+    if [[ ${real##*/} == omarchy-plugins ]] && grep -qF "\"$KEY\"" "${real%/*}/install.sh" 2>/dev/null; then
+      echo omaplugs
+    else
+      echo foreign
+    fi
+  elif [[ $target == */omarchy/plugins/*/omarchy-plugins ]]; then
+    echo stale  # broken link left behind by a removed OmaPlugs plugin
+  else
+    echo foreign
+  fi
+}
+
 if [[ ${1:-} == "--uninstall" ]]; then
-  [[ -L $BIN ]] && rm -f "$BIN" && echo "Removed $BIN"
-  if [[ -f $MENU ]] && grep -q "\"$KEY\"" "$MENU"; then
+  if [[ $(bin_state) == this ]]; then
+    rm -f "$BIN" && echo "Removed $BIN"
+  fi
+  # Keep the row while $BIN still launches another OmaPlugs copy (e.g. the installed plugin).
+  if [[ $(bin_state) != omaplugs ]] && [[ -f $MENU ]] && grep -q "\"$KEY\"" "$MENU"; then
     tmp="$(mktemp)"
     grep -v "\"$KEY\"" "$MENU" >"$tmp"
     mv "$tmp" "$MENU"
@@ -40,9 +71,24 @@ if [[ ${1:-} == "--uninstall" ]]; then
   exit 0
 fi
 
-mkdir -p "$(dirname "$BIN")"
-ln -sfn "$HERE/omarchy-plugins" "$BIN"
-echo "Linked $BIN -> $HERE/omarchy-plugins"
+auto=false
+[[ $HERE == */omarchy/plugins/* ]] && auto=true
+
+case "$(bin_state)" in
+  none | this | stale) link=true ;;
+  omaplugs) if $auto; then link=false; else link=true; fi ;;
+  *)
+    echo "$BIN already exists and is not OmaPlugs Browser; leaving it alone and not adding the menu row." >&2
+    exit 0
+    ;;
+esac
+if $link; then
+  mkdir -p "$(dirname "$BIN")"
+  ln -sfn "$HERE/omarchy-plugins" "$BIN"
+  echo "Linked $BIN -> $HERE/omarchy-plugins"
+else
+  echo "Keeping $BIN -> $(readlink "$BIN") (another OmaPlugs copy)"
+fi
 
 mkdir -p "$(dirname "$MENU")"
 [[ -f $MENU ]] || printf '{\n}\n' >"$MENU"

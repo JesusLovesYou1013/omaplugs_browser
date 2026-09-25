@@ -67,5 +67,40 @@ bash "$fake/checkout/install.sh" >/dev/null
 disabled; remove
 check "someone else's install (link elsewhere) is left alone" "[[ \$(rows) == 1 && \$(readlink '$link') == '$fake/checkout/omarchy-plugins' ]]"
 
+# ~/.local/bin/omarchy-plugins that isn't ours must never be replaced (marketplace review, #8578).
+reset() { disabled; remove; rm -f "$link"; cp "$fake/menu.orig" "$menu"; }
+checkout="$fake/checkout"
+manual() { bash "$checkout/install.sh" "$@" >/dev/null 2>&1; }
+
+reset; printf '#!/bin/sh\necho mine\n' >"$link"; chmod +x "$link"; cp "$link" "$fake/mine"
+enabled; warn=$(bash "$plug/install.sh" 2>&1 >/dev/null)
+check "a user's own file is kept on enable" "[[ ! -L '$link' ]] && cmp -s '$link' '$fake/mine'"
+check "  ...and no menu row is added (it would run their file)" "[[ \$(rows) == 0 ]]"
+check "  ...and a warning says why" "[[ \$warn == *'not OmaPlugs'* ]]"
+manual
+check "a user's own file is kept by a manual install too" "cmp -s '$link' '$fake/mine'"
+manual --uninstall
+check "a user's own file is kept by --uninstall" "cmp -s '$link' '$fake/mine'"
+
+reset; ln -s /usr/bin/true "$link"; enabled; apply 2>/dev/null
+check "a user's own link to another program is kept" "[[ \$(readlink '$link') == /usr/bin/true && \$(rows) == 0 ]]"
+
+reset; ln -s "$fake/gone/my-tool" "$link"; enabled; apply 2>/dev/null
+check "a user's own broken link is kept" "[[ \$(readlink '$link') == '$fake/gone/my-tool' ]]"
+
+reset; ln -s "$cfg/omarchy/plugins/old.omaplugs/omarchy-plugins" "$link"; enabled; apply
+check "a broken link left by a removed OmaPlugs plugin is replaced" "[[ \$(readlink '$link') == '$plug/omarchy-plugins' && \$(rows) == 1 ]]"
+
+reset; manual; enabled; apply
+check "enable/shell restart keeps a manual test install's link" "[[ \$(readlink '$link') == '$checkout/omarchy-plugins' && \$(rows) == 1 ]]"
+
+reset; enabled; apply; manual
+check "a manual install takes over from the installed plugin" "[[ \$(readlink '$link') == '$checkout/omarchy-plugins' && \$(rows) == 1 ]]"
+manual --uninstall
+check "manual --uninstall removes its own link and the row" "[[ ! -e '$link' && ! -L '$link' && \$(rows) == 0 ]]"
+
+reset; enabled; apply; manual --uninstall
+check "manual --uninstall leaves the installed plugin's link and row" "[[ \$(readlink '$link') == '$plug/omarchy-plugins' && \$(rows) == 1 ]]"
+
 echo; (( fails == 0 )) && echo "all passed" || echo "$fails failed"
 exit $(( fails > 0 ))
