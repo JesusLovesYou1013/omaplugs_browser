@@ -17,6 +17,8 @@ cfg="$XDG_CONFIG_HOME"
 
 # Stub omarchy-menu so a refresh never reaches the real shell.
 mkdir -p "$fake/stub"; printf '#!/bin/sh\nexit 0\n' >"$fake/stub/omarchy-menu"; chmod +x "$fake/stub/omarchy-menu"
+# Stub notify-send too: record the notification instead of showing it.
+printf '#!/bin/sh\nprintf "%%s|" "$@" >>"%s/notified"\n' "$fake" >"$fake/stub/notify-send"; chmod +x "$fake/stub/notify-send"
 export PATH="$fake/stub:$PATH"
 
 ok()   { echo "ok   - $1"; }
@@ -73,12 +75,14 @@ checkout="$fake/checkout"
 manual() { bash "$checkout/install.sh" "$@" >/dev/null 2>&1; }
 
 reset; printf '#!/bin/sh\necho mine\n' >"$link"; chmod +x "$link"; cp "$link" "$fake/mine"
-enabled; warn=$(bash "$plug/install.sh" 2>&1 >/dev/null)
+enabled; rm -f "$fake/notified"; warn=$(bash "$plug/install.sh" 2>&1 >/dev/null); rc=$?
 check "a user's own file is kept on enable" "[[ ! -L '$link' ]] && cmp -s '$link' '$fake/mine'"
-check "  ...and no menu row is added (it would run their file)" "[[ \$(rows) == 0 ]]"
-check "  ...and a warning says why" "[[ \$warn == *'not OmaPlugs'* ]]"
-manual
-check "a user's own file is kept by a manual install too" "cmp -s '$link' '$fake/mine'"
+check "  ...setup fails (exit status 1)" "[[ $rc == 1 ]]"
+check "  ...and no menu row is added" "[[ \$(rows) == 0 ]] && cmp -s '$menu' '$fake/menu.orig'"
+check "  ...and the error says why" "[[ \$warn == *\"isn't OmaPlugs Browser\"* ]]"
+check "  ...and a desktop notification tells the user" "grep -q \"couldn't finish setup\" '$fake/notified'"
+manual; rc=$?
+check "a manual install fails too and keeps the user's file" "[[ $rc == 1 ]] && cmp -s '$link' '$fake/mine' && [[ \$(rows) == 0 ]]"
 manual --uninstall
 check "a user's own file is kept by --uninstall" "cmp -s '$link' '$fake/mine'"
 

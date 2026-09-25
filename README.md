@@ -68,8 +68,8 @@ Omarchy merges its own default menu first, the row lands *after* the built-in ro
 submenu (below "Remove Plugin").
 
 If `~/.local/bin/omarchy-plugins` already exists and isn't OmaPlugs Browser (your own script or
-link), it is never replaced or deleted: the plugin leaves it alone and skips the menu row, since
-that row would run your file instead.
+link), setup stops and a notification tells you why: nothing is linked, added or changed, and
+your file is never replaced or deleted. Rename or remove it, then disable and re-enable the plugin.
 
 ## Install from a checkout (without the plugin system)
     ./install.sh
@@ -77,7 +77,8 @@ that row would run your file instead.
 
 Does the same two things as enabling the plugin, from wherever you cloned the repo. A manual install
 takes over the menu row from the installed plugin (handy for testing a checkout), and
-`--uninstall` only removes the link if it points at that checkout.
+`--uninstall` only removes the link if it points at that checkout. If the plugin is also installed, disable and
+re-enable it afterwards to give it back the menu row.
 
 ## Test
     python3 -m unittest discover -s tests -v

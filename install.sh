@@ -19,8 +19,8 @@
 #
 #   ~/.local/bin/omarchy-plugins is only ever replaced when it is missing, is a
 #   link to this copy, or is a link to another OmaPlugs copy (run by hand only).
-#   Anything else there belongs to the user: it is left alone, no menu row is
-#   added (the row would run it), and a warning goes to stderr. When the plugin
+#   Anything else there belongs to the user: setup stops with an error and a
+#   desktop notification, and nothing is linked, added or changed. When the plugin
 #   runs this automatically (from Omarchy's plugin folder), a link to another
 #   OmaPlugs copy (e.g. a manual test install) is kept as well.
 set -euo pipefail
@@ -78,8 +78,10 @@ case "$(bin_state)" in
   none | this | stale) link=true ;;
   omaplugs) if $auto; then link=false; else link=true; fi ;;
   *)
-    echo "$BIN already exists and is not OmaPlugs Browser; leaving it alone and not adding the menu row." >&2
-    exit 0
+    msg="~/.local/bin/omarchy-plugins already exists and isn't OmaPlugs Browser, so it was left alone. Rename or remove it, then disable and re-enable the plugin."
+    echo "OmaPlugs Browser couldn't finish setup: $msg" >&2
+    command -v notify-send >/dev/null && notify-send -a "OmaPlugs Browser" "OmaPlugs Browser couldn't finish setup" "$msg" || true
+    exit 1
     ;;
 esac
 if $link; then
