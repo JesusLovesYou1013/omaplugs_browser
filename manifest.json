@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.jesuslovesyou1013.omaplugs-browser",
   "name": "OmaPlugs Browser",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "JesusLovesYou1013",
   "license": "GPL-3.0",
   "description": "Browse the Omarchy plugin marketplace and manage your installed plugins (add, remove, enable, disable, update and switch versions), with screenshots and version history. Once enabled, it opens from Setup › Plugins › Browse Plugins; no bar icon.",

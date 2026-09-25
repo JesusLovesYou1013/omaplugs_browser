@@ -5,6 +5,8 @@ Set OMARCHY_PLUGINS_SAMPLE_CATALOG=/path/to/catalog.json to also exercise a real
 """
 
 import atexit
+import gzip
+import io
 import json
 import os
 import shutil
@@ -435,6 +437,55 @@ class SandboxTests(unittest.TestCase):
         self._restore()
         self.assertFalse(backend.SANDBOX)
         self.assertNotEqual(backend.run(["true"])[0], 126)
+
+
+class DownloadLimitTests(unittest.TestCase):
+    """Oversized responses are refused before they fill memory or the cache (no network used)."""
+
+    class _Response(io.BytesIO):
+        def __init__(self, body, headers=None):
+            super().__init__(body)
+            self.headers = headers or {}
+
+    def _serve(self, body, headers=None):
+        real = backend.urllib.request.urlopen
+        backend.urllib.request.urlopen = lambda *a, **k: self._Response(body, headers)
+        self.addCleanup(setattr, backend.urllib.request, "urlopen", real)
+
+    def test_read_capped(self):
+        self.assertEqual(backend.read_capped(io.BytesIO(b"x" * 100), 100), b"x" * 100)
+        with self.assertRaises(backend.TooLarge):
+            backend.read_capped(io.BytesIO(b"x" * 101), 100)
+
+    def test_gzip_bomb_is_refused(self):
+        bomb = gzip.compress(b"\0" * (5 * 1024 * 1024))  # ~5 KB that expands to 5 MB
+        self.assertLess(len(bomb), 64 * 1024)
+        with self.assertRaises(backend.TooLarge):
+            backend.gunzip_capped(bomb, 1024 * 1024)
+        self.assertEqual(backend.gunzip_capped(gzip.compress(b"ok"), 2), b"ok")
+        with self.assertRaises(ValueError):
+            backend.gunzip_capped(b"not gzip", 100)
+
+    def test_oversized_image_is_not_cached(self):
+        self._serve(b"x" * (backend.IMAGE_MAX_BYTES + 1))
+        url = "https://plugins.omarchy.org/too-big-test.webp"
+        self.assertIsNone(backend.fetch_image(url))
+        self.assertEqual(list((backend.CACHE_DIR / "images").glob("*too-big*")), [])
+        self._serve(b"small")
+        self.assertTrue(Path(backend.fetch_image(url)).read_bytes() == b"small")
+
+    def test_oversized_catalog_is_refused(self):
+        body = json.dumps({"plugins": [{"pad": "x" * 2048}] * 4096}).encode()  # ~8.5 MB of JSON
+        gz = {"Content-Encoding": "gzip"}
+        self._serve(gzip.compress(body), gz)
+        self.assertIsNotNone(backend.fetch_catalog(force=True)[0])
+        real = backend.CATALOG_MAX_JSON_BYTES
+        backend.CATALOG_MAX_JSON_BYTES = 1024 * 1024
+        self.addCleanup(setattr, backend, "CATALOG_MAX_JSON_BYTES", real)
+        self._serve(gzip.compress(body), gz)
+        entries, status = backend.fetch_catalog(force=True)
+        self.assertIsNone(entries)
+        self.assertIn("offline", status)
 
 
 if __name__ == "__main__":

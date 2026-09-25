@@ -14,7 +14,6 @@ behaves exactly like Setup > Plugins does.
 """
 
 import atexit
-import gzip
 import hashlib
 import json
 import os
@@ -27,6 +26,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import zlib
 from pathlib import Path
 from urllib.parse import quote
 
@@ -46,6 +46,13 @@ TAGS_TTL = 12 * 3600
 GITHUB_TTL = 6 * 3600
 IMAGE_TTL = 7 * 24 * 3600
 
+# Download caps. Far above real sizes (catalog ~1.4 MB gzip / 9 MB JSON, previews ~100 KB), so they
+# only stop a broken or hostile server from filling memory or the disk cache.
+IMAGE_MAX_BYTES = 10 * 1024 * 1024
+CATALOG_MAX_BYTES = 32 * 1024 * 1024
+CATALOG_MAX_JSON_BYTES = 128 * 1024 * 1024
+GITHUB_MAX_BYTES = 2 * 1024 * 1024
+
 
 # --------------------------------------------------------------------------- helpers
 
@@ -57,6 +64,33 @@ def _env():
     extra = [str(Path.home() / ".local/share/omarchy/bin"), f"{OMARCHY_PATH}/bin"]
     env["PATH"] = os.pathsep.join(extra + [env.get("PATH", "")])
     return env
+
+
+class TooLarge(ValueError):
+    """A download went over its size cap. A ValueError, so callers treat it like bad data."""
+
+
+def read_capped(response, limit):
+    """Read a response body, giving up as soon as it passes `limit` bytes."""
+    chunks, size = [], 0
+    while chunk := response.read(min(65536, limit + 1 - size)):
+        chunks.append(chunk)
+        size += len(chunk)
+        if size > limit:
+            raise TooLarge(f"response larger than {limit} bytes")
+    return b"".join(chunks)
+
+
+def gunzip_capped(data, limit):
+    """gzip-decompress without ever holding more than `limit` + 1 output bytes (no zip bombs)."""
+    d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    try:
+        out = d.decompress(data, limit + 1)
+    except zlib.error as e:
+        raise ValueError(f"bad gzip data ({e})") from e
+    if len(out) > limit or d.unconsumed_tail:
+        raise TooLarge(f"decompressed data larger than {limit} bytes")
+    return out
 
 
 # --------------------------------------------------------------------------- sandbox mode
@@ -203,8 +237,8 @@ def fetch_image(url):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
-            data = r.read()
-    except (urllib.error.URLError, OSError):
+            data = read_capped(r, IMAGE_MAX_BYTES)
+    except (urllib.error.URLError, OSError, ValueError):
         return str(path) if path.exists() else None  # serve a stale copy rather than nothing
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -386,9 +420,9 @@ def fetch_catalog(force=False):
         req.add_header("If-None-Match", etag)
     try:
         with urllib.request.urlopen(req, timeout=25) as r:
-            raw = r.read()
+            raw = read_capped(r, CATALOG_MAX_BYTES)
             if r.headers.get("Content-Encoding") == "gzip":
-                raw = gzip.decompress(raw)
+                raw = gunzip_capped(raw, CATALOG_MAX_JSON_BYTES)
             data = json.loads(raw)
             if not isinstance(data.get("plugins"), list):
                 raise ValueError("unexpected catalog format")
@@ -628,7 +662,7 @@ def github_info(repo_url):
     def get(url):
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read())
+            return json.loads(read_capped(r, GITHUB_MAX_BYTES))
 
     data = {"repo": {}, "user": {}, "error": None}
     try:
