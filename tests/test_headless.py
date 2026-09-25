@@ -130,6 +130,45 @@ class BackendTests(unittest.TestCase):
         p.installed, p.installed_tag = True, "v1.0.0"
         self.assertEqual(p.selected_index(), 3)
 
+    def test_unlisted_plugin_after_update(self):
+        # An unlisted plugin updated with `omarchy plugin update` (commits fetched, tags not): the open
+        # window must show the new version as installed and label "latest" with the newest remote tag.
+        plugins = {}
+        me = dict(id="me.tool", first_party=False, dir="/t", remote="https://github.com/me/tool.git")
+        backend.merge(plugins, CATALOG, local(version="1.0.1", head="aaa1111", tags=["v1.0.0"], **me))
+        p = plugins["me.tool"]
+        p.remote_tags, p.tags_state = ["v1.0.0", "v1.0.1"], "loaded"
+        p.remote_tag_commits = {"v1.0.0": "0000000" * 6, "v1.0.1": "aaa1111" + "0" * 33}
+        self.assertEqual(p.current_tag, "v1.0.1")  # matched through the remote tag's commit
+        self.assertEqual(p.versions()[p.selected_index()][1], "v1.0.1")
+        backend.merge(plugins, CATALOG, local(version="1.0.4", head="bbb2222", tags=["v1.0.0"], **me))
+        self.assertEqual(p.version, "1.0.4")  # manifest re-read, not frozen at window open
+        self.assertEqual((p.tags_state, p.tags_refetch), ("none", True))  # tags re-read, bypassing the cache
+        p.remote_tags, p.tags_state = ["v1.0.0", "v1.0.1", "v1.0.4"], "loaded"
+        p.remote_tag_commits["v1.0.4"] = "bbb2222" + "0" * 33
+        self.assertEqual(p.versions()[0][0], "v1.0.4 (latest)")
+        self.assertEqual(p.current_tag, "v1.0.4")
+        self.assertEqual(p.versions()[p.selected_index()][1], "v1.0.4")
+        p.remote_tag_commits = {}
+        self.assertEqual(p.current_tag, "")  # tags not loaded yet: no guess
+
+    def test_listed_plugin_latest_is_the_marketplace_version(self):
+        plugins = {}
+        backend.merge(plugins, CATALOG, local(id="acme.weather", first_party=False, dir="/x", version="1.0.0"))
+        p = plugins["acme.weather"]
+        p.remote_tags = ["v9.9.9"]
+        self.assertEqual(p.latest_version, "1.2.0")
+
+    def test_remote_tags_reads_tag_commits(self):
+        out = ("1111111111111111111111111111111111111111\trefs/tags/v1.0.0\n"
+               "2222222222222222222222222222222222222222\trefs/tags/v1.1.0\n"
+               "3333333333333333333333333333333333333333\trefs/tags/v1.1.0^{}\n")
+        orig, backend.run = backend.run, lambda *a, **k: (0, out)
+        self.addCleanup(setattr, backend, "run", orig)
+        self.assertEqual(backend.remote_tags("https://github.com/me/tagtest", force=True), ["v1.1.0", "v1.0.0"])
+        self.assertEqual(backend.remote_tag_commits("https://github.com/me/tagtest"),
+                         {"v1.0.0": "1" * 40, "v1.1.0": "3" * 40})  # annotated tag -> the commit, not the tag object
+
     def test_update_flag_and_states(self):
         p = Plugin("x")
         p.installed, p.update_state = True, "available"

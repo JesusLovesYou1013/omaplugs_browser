@@ -295,7 +295,9 @@ class Plugin(GObject.Object):
         self.kinds = []
         # versions
         self.remote_tags = []
+        self.remote_tag_commits = {}  # tag -> commit it points at (from the remote, read-only)
         self.tags_state = "none"     # none | loading | loaded
+        self.tags_refetch = False    # installed commit changed: bypass the tag cache next time
         self.selected_version = None  # tag chosen before adding; None = latest
         self.busy = None
         # updates (git-managed third-party plugins only)
@@ -354,6 +356,7 @@ class Plugin(GObject.Object):
     def snapshot(self):
         return (self.installed, self.enabled, self.can_disable, self.installed_version, self.installed_tag,
                 tuple(self.local_tags), tuple(self.remote_tags), self.tags_state, self.version, self.busy,
+                tuple(sorted(self.remote_tag_commits.items())),
                 self.local_id, self.name, self.update_state, self.head)
 
     def notify_changed(self):
@@ -363,12 +366,30 @@ class Plugin(GObject.Object):
     # -- versions
     def versions(self):
         """[(label, tag|None)]; the first entry is always 'latest' (tag None)."""
-        latest = f"{self.version} (latest)" if self.version else "latest"
+        latest = f"{self.latest_version} (latest)" if self.latest_version else "latest"
         tags = sort_tags([*self.remote_tags, *self.local_tags])
         return [(latest, None)] + [(t, t) for t in tags if not t.startswith("-")]
 
+    @property
+    def latest_version(self):
+        """The marketplace version; for unlisted plugins, the newest tag of their repository."""
+        if self.source == "local" and self.remote_tags:
+            return sort_tags(self.remote_tags)[0]
+        return self.version
+
+    @property
+    def current_tag(self):
+        """The tag the installed commit is on. `omarchy plugin update` fetches commits but not
+        tags, so fall back to matching the installed commit against the remote's tags."""
+        if self.installed_tag or not self.head:
+            return self.installed_tag
+        for tag in sort_tags(self.remote_tag_commits):
+            if self.remote_tag_commits[tag].startswith(self.head):
+                return tag
+        return ""
+
     def selected_index(self):
-        tag = self.installed_tag if self.installed else self.selected_version
+        tag = self.current_tag if self.installed else self.selected_version
         if tag:
             for i, (_label, t) in enumerate(self.versions()):
                 if t == tag:
@@ -565,6 +586,8 @@ def merge(plugins, catalog_entries, local):
             elif l["remote"]:
                 p.repo = re.sub(r"\.git$", "", l["remote"]) if l["remote"].startswith("http") else ""
         matched.add(p.id)
+        if p.source == "local":
+            p.version = l["version"]  # not in the marketplace: re-read after every update
         p.local_id = lid
         p.installed, p.enabled = True, l["enabled"]
         p.can_disable, p.first_party = l["can_disable"], l["first_party"] or p.first_party
@@ -573,6 +596,8 @@ def merge(plugins, catalog_entries, local):
         head, on_branch = l.get("head", ""), l.get("on_branch", True)
         if head != p.head:  # installed or updated (possibly by another process): re-check
             p.update_state, p.update_checked = "unknown", 0.0
+            if p.head and p.tags_state == "loaded":  # a new release may be why: re-read its tags
+                p.tags_state, p.tags_refetch = "none", True
         p.head, p.on_branch = head, on_branch
         p.manifest_path, p.default_section = l.get("manifest_path", ""), l.get("default_section", "")
         if not head or l["first_party"]:
@@ -613,16 +638,26 @@ def remote_tags(repo, force=False):
         if _tag_cache is None:
             _tag_cache = read_json(CACHE_DIR / "tags.json", {}) or {}
         hit = _tag_cache.get(repo)
-    if hit and not force and time.time() - hit["t"] < TAGS_TTL:
+    if hit and "commits" in hit and not force and time.time() - hit["t"] < TAGS_TTL:
         return hit["tags"]
-    rc, out = run(["git", "ls-remote", "--tags", "--refs", repo + ".git"], 30)
+    rc, out = run(["git", "ls-remote", "--tags", repo + ".git"], 30)
     if rc != 0:
         return hit["tags"] if hit else []
-    tags = sort_tags(m.group(1) for m in re.finditer(r"refs/tags/(\S+)", out))
+    commits = {}
+    for sha, tag, peeled in re.findall(r"^([0-9a-f]{7,64})\trefs/tags/(\S+?)(\^\{\})?$", out, re.M):
+        if peeled or tag not in commits:  # an annotated tag's ^{} line is the commit it points at
+            commits[tag] = sha
+    tags = sort_tags(commits)
     with _tag_lock:
-        _tag_cache[repo] = {"t": time.time(), "tags": tags}
+        _tag_cache[repo] = {"t": time.time(), "tags": tags, "commits": commits}
         write_json(CACHE_DIR / "tags.json", _tag_cache)
     return tags
+
+
+def remote_tag_commits(repo):
+    """tag -> commit for `repo`, as last read by remote_tags() (empty if never read)."""
+    with _tag_lock:
+        return dict(((_tag_cache or {}).get(repo) or {}).get("commits") or {})
 
 
 class TagWorkers:

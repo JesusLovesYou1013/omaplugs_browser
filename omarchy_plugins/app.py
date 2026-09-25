@@ -552,9 +552,9 @@ class InfoPage(Gtk.Box):
         p, g = self.p, self._details
         self._reset(g)
         kinds = p.kind_label or ", ".join(p.kinds)
-        self._row(g, "Latest version", p.version)
+        self._row(g, "Latest version", p.latest_version)
         if p.installed:
-            self._row(g, "Installed version", p.installed_tag or p.installed_version)
+            self._row(g, "Installed version", p.current_tag or p.installed_version)
         self._row(g, "Kind", kinds)
         self._row(g, "Category", p.category)
         self._row(g, "Tags", ", ".join(p.tags))
@@ -1066,21 +1066,25 @@ class Window(Adw.ApplicationWindow):
         if not force and not (p.has_release_hint or p.installed):
             return
         p.tags_state = "loading"
-        repo = p.repo
+        repo, refetch = p.repo, p.tags_refetch
+        p.tags_refetch = False
 
-        def done(tags):
+        def done(result):
+            tags, commits = result
+
             def apply():
-                p.remote_tags, p.tags_state = list(tags or []), "loaded"
+                p.remote_tags, p.remote_tag_commits, p.tags_state = list(tags or []), commits, "loaded"
                 p.notify_changed()
                 return False
             GLib.idle_add(apply)
-        self.tag_workers.submit(lambda: backend.remote_tags(repo), done)
+        self.tag_workers.submit(
+            lambda: (backend.remote_tags(repo, force=refetch), backend.remote_tag_commits(repo)), done)
 
     def request_version(self, p, tag):
         if not p.installed:
             p.selected_version = tag
             return
-        current = p.installed_tag or None
+        current = p.current_tag or None
         if tag == current:
             return
         target = tag or "the latest version"
