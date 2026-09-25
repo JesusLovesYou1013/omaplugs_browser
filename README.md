@@ -62,7 +62,7 @@ It's a background `service` plugin with no bar icon. While enabled, it adds
 **Setup › Plugins › Browse Plugins** to your Omarchy menu. Disable it (Setup › Plugins ›
 Disable Plugin) or remove it and the menu row is removed again.
 
-Entirely per-user: no `sudo`, no system files touched. It links `~/.local/bin/omarchy-plugins`
+Entirely per-user: no elevated privileges needed, no system files touched. It links `~/.local/bin/omarchy-plugins`
 and adds the menu row to your own `~/.config/omarchy/extensions/omarchy-menu.jsonc`. Because
 Omarchy merges its own default menu first, the row lands *after* the built-in rows in its
 submenu (below "Remove Plugin").
