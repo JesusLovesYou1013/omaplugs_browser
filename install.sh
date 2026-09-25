@@ -18,11 +18,10 @@
 #   ./install.sh --uninstall  remove both again
 #
 #   ~/.local/bin/omarchy-plugins is only ever replaced when it is missing, is a
-#   link to this copy, or is a link to another OmaPlugs copy (run by hand only).
-#   Anything else there belongs to the user: setup stops with an error and a
-#   desktop notification, and nothing is linked, added or changed. When the plugin
-#   runs this automatically (from Omarchy's plugin folder), a link to another
-#   OmaPlugs copy (e.g. a manual test install) is kept as well.
+#   link to this copy, or is a broken link left by a removed OmaPlugs plugin.
+#   If it belongs to the user, or to another installed OmaPlugs copy (e.g. the
+#   marketplace plugin plus a manual install), setup stops with an error and a
+#   desktop notification, and nothing is linked, added or changed.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,26 +70,33 @@ if [[ ${1:-} == "--uninstall" ]]; then
   exit 0
 fi
 
-auto=false
-[[ $HERE == */omarchy/plugins/* ]] && auto=true
+# Stop with an error and a desktop notification; nothing is changed.
+fail() {
+  echo "$1: $2" >&2
+  command -v notify-send >/dev/null && notify-send -a "OmaPlugs Browser" "$1" "$2" || true
+  exit 1
+}
 
 case "$(bin_state)" in
-  none | this | stale) link=true ;;
-  omaplugs) if $auto; then link=false; else link=true; fi ;;
+  none | this | stale) ;;
+  omaplugs)
+    other="$(readlink -f "$BIN")"; other="${other%/*}"
+    if [[ $HERE == */omarchy/plugins/* ]]; then
+      fix="Remove it, then disable and re-enable this plugin."
+    else
+      fix="Disable or remove it, then run install.sh again."
+    fi
+    fail "OmaPlugs Browser failed to install" \
+      "Another version of OmaPlugs Browser is already installed (at ${other/#$HOME/\~}). $fix"
+    ;;
   *)
-    msg="~/.local/bin/omarchy-plugins already exists and isn't OmaPlugs Browser, so it was left alone. Rename or remove it, then disable and re-enable the plugin."
-    echo "OmaPlugs Browser couldn't finish setup: $msg" >&2
-    command -v notify-send >/dev/null && notify-send -a "OmaPlugs Browser" "OmaPlugs Browser couldn't finish setup" "$msg" || true
-    exit 1
+    fail "OmaPlugs Browser couldn't finish setup" \
+      "~/.local/bin/omarchy-plugins already exists and isn't OmaPlugs Browser, so it was left alone. Rename or remove it, then disable and re-enable the plugin."
     ;;
 esac
-if $link; then
-  mkdir -p "$(dirname "$BIN")"
-  ln -sfn "$HERE/omarchy-plugins" "$BIN"
-  echo "Linked $BIN -> $HERE/omarchy-plugins"
-else
-  echo "Keeping $BIN -> $(readlink "$BIN") (another OmaPlugs copy)"
-fi
+mkdir -p "$(dirname "$BIN")"
+ln -sfn "$HERE/omarchy-plugins" "$BIN"
+echo "Linked $BIN -> $HERE/omarchy-plugins"
 
 mkdir -p "$(dirname "$MENU")"
 [[ -f $MENU ]] || printf '{\n}\n' >"$MENU"

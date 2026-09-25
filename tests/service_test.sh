@@ -95,16 +95,25 @@ check "a user's own broken link is kept" "[[ \$(readlink '$link') == '$fake/gone
 reset; ln -s "$cfg/omarchy/plugins/old.omaplugs/omarchy-plugins" "$link"; enabled; apply
 check "a broken link left by a removed OmaPlugs plugin is replaced" "[[ \$(readlink '$link') == '$plug/omarchy-plugins' && \$(rows) == 1 ]]"
 
-reset; manual; enabled; apply
-check "enable/shell restart keeps a manual test install's link" "[[ \$(readlink '$link') == '$checkout/omarchy-plugins' && \$(rows) == 1 ]]"
+# Two OmaPlugs copies must not both install: the second one fails and says where the first is.
+reset; manual; cp "$menu" "$fake/menu.manual"; enabled; rm -f "$fake/notified"
+err=$(bash "$plug/install.sh" 2>&1 >/dev/null); rc=$?
+check "enabling the plugin over a manual install fails (exit status 1)" "[[ $rc == 1 ]]"
+check "  ...keeps the manual install's link and menu untouched" "[[ \$(readlink '$link') == '$checkout/omarchy-plugins' ]] && cmp -s '$menu' '$fake/menu.manual'"
+check "  ...notifies that another version is installed, and where" "grep -q 'failed to install|Another version of OmaPlugs Browser is already installed (at ~/checkout)' '$fake/notified'"
+check "  ...and says to remove it, then re-enable" "[[ \$err == *'Remove it, then disable and re-enable this plugin.'* ]]"
 
-reset; enabled; apply; manual
-check "a manual install takes over from the installed plugin" "[[ \$(readlink '$link') == '$checkout/omarchy-plugins' && \$(rows) == 1 ]]"
+reset; enabled; apply; cp "$menu" "$fake/menu.plugin"; rm -f "$fake/notified"
+err=$(bash "$checkout/install.sh" 2>&1 >/dev/null); rc=$?
+check "a manual install over the enabled plugin fails (exit status 1)" "[[ $rc == 1 ]]"
+check "  ...keeps the plugin's link and menu untouched" "[[ \$(readlink '$link') == '$plug/omarchy-plugins' ]] && cmp -s '$menu' '$fake/menu.plugin'"
+check "  ...notifies where the other version is" "grep -q 'Another version of OmaPlugs Browser is already installed (at ~/.config/omarchy/plugins/$id)' '$fake/notified'"
+check "  ...and says to disable it, then run install.sh again" "[[ \$err == *'Disable or remove it, then run install.sh again.'* ]]"
 manual --uninstall
-check "manual --uninstall removes its own link and the row" "[[ ! -e '$link' && ! -L '$link' && \$(rows) == 0 ]]"
+check "manual --uninstall then leaves the installed plugin's link and row" "[[ \$(readlink '$link') == '$plug/omarchy-plugins' && \$(rows) == 1 ]]"
 
-reset; enabled; apply; manual --uninstall
-check "manual --uninstall leaves the installed plugin's link and row" "[[ \$(readlink '$link') == '$plug/omarchy-plugins' && \$(rows) == 1 ]]"
+reset; manual; manual --uninstall
+check "manual install then --uninstall removes its own link and the row" "[[ ! -e '$link' && ! -L '$link' && \$(rows) == 0 ]]"
 
 echo; (( fails == 0 )) && echo "all passed" || echo "$fails failed"
 exit $(( fails > 0 ))

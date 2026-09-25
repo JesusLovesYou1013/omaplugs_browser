@@ -71,14 +71,18 @@ If `~/.local/bin/omarchy-plugins` already exists and isn't OmaPlugs Browser (you
 link), setup stops and a notification tells you why: nothing is linked, added or changed, and
 your file is never replaced or deleted. Rename or remove it, then disable and re-enable the plugin.
 
+Only one copy of OmaPlugs Browser can be installed at a time. If another one is already installed
+(for example a manual install from a checkout), setup fails the same way, and the notification says
+where the other one is. Remove it, then disable and re-enable the plugin.
+
 ## Install from a checkout (without the plugin system)
     ./install.sh
     ./install.sh --uninstall
 
-Does the same two things as enabling the plugin, from wherever you cloned the repo. A manual install
-takes over the menu row from the installed plugin (handy for testing a checkout), and
-`--uninstall` only removes the link if it points at that checkout. If the plugin is also installed, disable and
-re-enable it afterwards to give it back the menu row.
+Does the same two things as enabling the plugin, from wherever you cloned the repo. If the plugin is
+enabled, the manual install fails with a notification: disable the plugin in Setup › Plugins first,
+and re-enable it once you've run `./install.sh --uninstall`. `--uninstall` only removes the link if it
+points at that checkout.
 
 ## Test
     python3 -m unittest discover -s tests -v
